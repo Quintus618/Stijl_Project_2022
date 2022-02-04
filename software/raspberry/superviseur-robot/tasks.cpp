@@ -172,6 +172,14 @@ void Tasks::Run() {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
+    //Get Value Battery MODIFIED
+    if (err = rt_task_start(&th_batteryValue, (void(*)(void*)) & Tasks::BatteryValue, this)) {
+        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    
+    //Movements for the robot
     if (err = rt_task_start(&th_move, (void(*)(void*)) & Tasks::MoveTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -354,6 +362,45 @@ void Tasks::StartRobotTask(void *arg) {
         }
     }
 }
+
+/**
+* @brief Thread returning the battery level
+*/
+    void BatteryValue(void *arg){
+        BatteryLevel bl;
+        MessageBattery * battery;
+        
+        cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+        // Synchronization barrier (waiting that all tasks are starting)
+        rt_sem_p(&sem_barrier, TM_INFINITE);
+        
+        //Periodicity
+        rt_task_set_periodic(NULL, TM_NOW, 500000000);
+        
+        while(1) {
+            
+            rt_task_wait_period(NULL);
+            cout << "Periodic movement update";
+            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+            rs = robotStarted;
+            rt_mutex_release(&mutex_robotStarted);
+            
+            if (rs == 1) {
+                msgSend=Message();
+                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                battery = (MessageBattery*)robot.Write(new Message(MESSAGE_ROBOT_BATTERY_GET));
+                rt_mutex_release(&mutex_robot);
+
+                cout << " battery: " << battery;
+
+                rt_mutex_acquire(&mutex_batteryLevel, TM_INFINITE);
+                robot.Write(new Message((MessageID)msg));
+                rt_mutex_release(&mutex_robot);
+            }
+            cout << endl << flush;
+            }
+        
+    }
 
 /**
  * @brief Thread handling control of the robot.
