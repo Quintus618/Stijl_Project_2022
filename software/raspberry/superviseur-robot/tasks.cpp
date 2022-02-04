@@ -76,21 +76,21 @@ void Tasks::Init() {
     cout << "Mutexes created successfully" << endl << flush;
 
     /**************************************************************************************/
-    /* 	Semaphors creation       							  */
+    /* 	Semaphors creation using Priority      							  */
     /**************************************************************************************/
-    if (err = rt_sem_create(&sem_barrier, NULL, 0, S_FIFO)) {
+    if (err = rt_sem_create(&sem_barrier, NULL, 0, S_PRIO)) {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_sem_create(&sem_openComRobot, NULL, 0, S_FIFO)) {
+    if (err = rt_sem_create(&sem_openComRobot, NULL, 0, S_PRIO)) {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_sem_create(&sem_serverOk, NULL, 0, S_FIFO)) {
+    if (err = rt_sem_create(&sem_serverOk, NULL, 0, S_PRIO)) {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_sem_create(&sem_startRobot, NULL, 0, S_FIFO)) {
+    if (err = rt_sem_create(&sem_startRobot, NULL, 0, S_PRIO)) {
         cerr << "Error semaphore create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -143,22 +143,31 @@ void Tasks::Run() {
     rt_task_set_priority(NULL, T_LOPRIO);
     int err;
 
+    //Launch the server
     if (err = rt_task_start(&th_server, (void(*)(void*)) & Tasks::ServerTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
+    //Send messages to the monitor
     if (err = rt_task_start(&th_sendToMon, (void(*)(void*)) & Tasks::SendToMonTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
+    //Receive messages from the monitor
     if (err = rt_task_start(&th_receiveFromMon, (void(*)(void*)) & Tasks::ReceiveFromMonTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
+    //Communication with the robot
     if (err = rt_task_start(&th_openComRobot, (void(*)(void*)) & Tasks::OpenComRobot, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
+    //Start the robot
     if (err = rt_task_start(&th_startRobot, (void(*)(void*)) & Tasks::StartRobotTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -264,8 +273,8 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             exit(-1);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
-        } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
-            rt_sem_v(&sem_startRobot);
+        } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD) || msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)) {  //Adding with watchdog
+            rt_sem_v(&sem_startRobot);    
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_LEFT) ||
