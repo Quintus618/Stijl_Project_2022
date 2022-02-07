@@ -25,7 +25,7 @@
 #define PRIORITY_TSENDTOMON 22
 #define PRIORITY_TRECEIVEFROMMON 25
 #define PRIORITY_TSTARTROBOT 20
-#define PRIORITY_TBATTERY 22
+#define PRIORITY_TBATTERY 20
 #define PRIORITY_TCAMERA 21
 
 /*
@@ -135,12 +135,6 @@ void Tasks::Init() {
     /* Message queues creation                                                            */
     /**************************************************************************************/
     if ((err = rt_queue_create(&q_messageToMon, "q_messageToMon", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
-        cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
-        exit(EXIT_FAILURE);
-    }
-    cout << "Queues created successfully" << endl << flush;
-    
-    if ((err = rt_queue_create(&q_messageToRobot, "q_messageToRobot", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
         cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -295,7 +289,8 @@ void Tasks::ReceiveFromMonTask(void *arg) {
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD) || msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)) {  //Adding with watchdog
-            rt_sem_v(&sem_startRobot);    
+            if(msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)) modeStart=1;
+            rt_sem_v(&sem_startRobot); 
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_LEFT) ||
@@ -358,9 +353,15 @@ void Tasks::StartRobotTask(void *arg) {
 
         Message * msgSend;
         rt_sem_p(&sem_startRobot, TM_INFINITE);
-        cout << "Start robot without watchdog (";
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        msgSend = robot.Write(robot.StartWithoutWD());
+        if(modeStart == 1){
+            cout << "Start robot with watchdog (";
+            robot.Write(robot.StartWithWD());
+        }
+        else{
+            cout << "Start robot without watchdog (";
+            msgSend = robot.Write(robot.StartWithoutWD());
+        }
         rt_mutex_release(&mutex_robot);
         cout << msgSend->GetID();
         cout << ")" << endl;
@@ -380,7 +381,6 @@ void Tasks::StartRobotTask(void *arg) {
 * @brief Thread returning the battery level
 */
 void Tasks::CheckBatteryTask(void *arg){
-        BatteryLevel bl;
         MessageBattery * battery;
         int rs;
         
@@ -405,10 +405,10 @@ void Tasks::CheckBatteryTask(void *arg){
                 rt_mutex_release(&mutex_robot);
 
                 cout << " battery: " << battery->ToString() << endl << flush;
-                WriteInQueue(&q_messageToRobot, battery); //connection lost ?
-                cout << " Msg to monitor: " << battery->ToString() << endl << flush;
                 WriteInQueue(&q_messageToMon,battery); //Send message to monitor
             }
+            
+            cout << endl << flush;
         }
         
     }

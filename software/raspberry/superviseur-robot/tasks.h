@@ -65,6 +65,7 @@ private:
     ComMonitor monitor;
     ComRobot robot;
     int robotStarted = 0;
+    int modeStart = 0;
     int move = MESSAGE_ROBOT_STOP;
     
     /**********************************************************************/
@@ -99,7 +100,6 @@ private:
     /**********************************************************************/
     int MSG_QUEUE_SIZE;
     RT_QUEUE q_messageToMon;
-    RT_QUEUE q_messageToRobot;
     
     /**********************************************************************/
     /* Tasks' functions                                                   */
