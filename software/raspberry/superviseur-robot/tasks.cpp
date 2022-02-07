@@ -25,6 +25,7 @@
 #define PRIORITY_TSENDTOMON 22
 #define PRIORITY_TRECEIVEFROMMON 25
 #define PRIORITY_TSTARTROBOT 20
+#define PRIORITY_TBATTERY 22
 #define PRIORITY_TCAMERA 21
 
 /*
@@ -115,6 +116,11 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
+    if (err = rt_task_create(&th_checkBattery, "th_checkBattery", 0, PRIORITY_TBATTERY, 0)) {
+        cerr <<  "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_task_create(&th_startRobot, "th_startRobot", 0, PRIORITY_TSTARTROBOT, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -133,6 +139,13 @@ void Tasks::Init() {
         exit(EXIT_FAILURE);
     }
     cout << "Queues created successfully" << endl << flush;
+    
+    if ((err = rt_queue_create(&q_messageToRobot, "q_messageToRobot", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
+        cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    cout << "Queues created successfully" << endl << flush;
+
 
 }
 
@@ -174,7 +187,7 @@ void Tasks::Run() {
     }
     
     //Get Value Battery MODIFIED
-    if (err = rt_task_start(&th_batteryValue, (void(*)(void*)) & Tasks::BatteryValue, this)) {
+    if (err = rt_task_start(&th_checkBattery, (void(*)(void*)) & Tasks::CheckBatteryTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -366,9 +379,10 @@ void Tasks::StartRobotTask(void *arg) {
 /**
 * @brief Thread returning the battery level
 */
-    void BatteryValue(void *arg){
+void Tasks::CheckBatteryTask(void *arg){
         BatteryLevel bl;
         MessageBattery * battery;
+        int rs;
         
         cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
         // Synchronization barrier (waiting that all tasks are starting)
@@ -380,25 +394,22 @@ void Tasks::StartRobotTask(void *arg) {
         while(1) {
             
             rt_task_wait_period(NULL);
-            cout << "Periodic movement update";
+            cout << " Battery check";
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             rs = robotStarted;
             rt_mutex_release(&mutex_robotStarted);
             
             if (rs == 1) {
-                msgSend=Message();
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
                 battery = (MessageBattery*)robot.Write(new Message(MESSAGE_ROBOT_BATTERY_GET));
                 rt_mutex_release(&mutex_robot);
 
-                cout << " battery: " << battery;
-
-                rt_mutex_acquire(&mutex_batteryLevel, TM_INFINITE);
-                robot.Write(new Message((MessageID)msg));
-                rt_mutex_release(&mutex_robot);
+                cout << " battery: " << battery->ToString() << endl << flush;
+                WriteInQueue(&q_messageToRobot, battery); //connection lost ?
+                cout << " Msg to monitor: " << battery->ToString() << endl << flush;
+                WriteInQueue(&q_messageToMon,battery); //Send message to monitor
             }
-            cout << endl << flush;
-            }
+        }
         
     }
 

@@ -76,7 +76,7 @@ private:
     RT_TASK th_openComRobot;
     RT_TASK th_startRobot;
     RT_TASK th_move;
-    RT_TASK th_batteryValue;
+    RT_TASK th_checkBattery;
     
     /**********************************************************************/
     /* Mutex                                                              */
@@ -84,7 +84,6 @@ private:
     RT_MUTEX mutex_monitor;
     RT_MUTEX mutex_robot;
     RT_MUTEX mutex_robotStarted;
-    RT_MUTEX mutex_batteryLevel;
     RT_MUTEX mutex_move;
 
     /**********************************************************************/
@@ -100,6 +99,7 @@ private:
     /**********************************************************************/
     int MSG_QUEUE_SIZE;
     RT_QUEUE q_messageToMon;
+    RT_QUEUE q_messageToRobot;
     
     /**********************************************************************/
     /* Tasks' functions                                                   */
@@ -132,7 +132,7 @@ private:
     /**
      * @brief Thread returning the battery level
      */
-    void BatteryValue(void *arg);
+    void CheckBatteryTask(void *arg);
     
     /**
      * @brief Thread handling control of the robot.
