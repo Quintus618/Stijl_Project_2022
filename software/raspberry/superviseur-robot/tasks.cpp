@@ -27,6 +27,7 @@
 #define PRIORITY_TSTARTROBOT 21
 #define PRIORITY_TBATTERY 20
 #define PRIORITY_TCAMERA 21
+#define PRIORITY_TRELOADWD 24
 
 /*
  * Some remarks:
@@ -126,6 +127,10 @@ void Tasks::Init() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_create(&th_move, "th_move", 0, PRIORITY_TMOVE, 0)) {
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_reloadWD, "th_reloadWD", 0, PRIORITY_TRELOADWD, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -348,13 +353,14 @@ void Tasks::StartRobotTask(void *arg) {
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
-    
+    bool launch = false;
     /**************************************************************************************/
     /* The task startRobot starts here                                                    */
     /**************************************************************************************/
     while (1) {
 
         Message * msgSend;
+        Message * msgSendtest;
         rt_sem_p(&sem_startRobot, TM_INFINITE);
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         
@@ -378,6 +384,16 @@ void Tasks::StartRobotTask(void *arg) {
         if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             robotStarted = 1;
+            if (launch == false && robotStarted == 1){
+                int err;
+                //Task to reload wd
+                cout << "Launch Thread reload";
+                if (err = rt_task_start(&th_reloadWD, (void(*)(void*)) & Tasks::ReloadWD, this)) {
+                    cerr << "Error task start: " << strerror(-err) << endl << flush;
+                    exit(EXIT_FAILURE);
+                } 
+                launch = true;
+            }
             rt_mutex_release(&mutex_robotStarted);
         }
     }
@@ -449,14 +465,47 @@ void Tasks::MoveTask(void *arg) {
             cout << " move: " << cpMove;
             
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            cout << " test1: " << cpMove;
             robot.Write(new Message((MessageID)cpMove));
             rt_mutex_release(&mutex_robot);
-            cout << " test2 : " << cpMove;
         }
         cout << endl << flush;
     }
 }
+
+/**
+ * @brief Thread reloading the WD
+ */
+void Tasks::ReloadWD(void *args){
+    cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+    // Synchronization barrier (waiting that all tasks are starting)
+    //rt_sem_p(&sem_barrier, TM_INFINITE);
+    
+    //Periodicity
+    rt_task_set_periodic(NULL, TM_NOW, 50000000);
+    
+    
+    int rs;
+    while (1) {
+        rt_task_wait_period(NULL);
+        cout << "Reload WD";
+        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+        rs = robotStarted;
+        rt_mutex_release(&mutex_robotStarted);
+        
+        Message * reload;
+        if (rs == 1) {
+            
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            reload = robot.Write(robot.ReloadWD());
+            rt_mutex_release(&mutex_robot);
+            
+            cout << " reload: " << reload->ToString() << endl << flush;
+            WriteInQueue(&q_messageToMon,reload); //Send message to monitor
+        }
+        cout << endl << flush;
+    }
+}
+
 
 /**
  * Write a message in a given queue
