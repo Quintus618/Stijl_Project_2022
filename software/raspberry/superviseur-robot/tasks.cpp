@@ -24,7 +24,7 @@
 #define PRIORITY_TMOVE 20
 #define PRIORITY_TSENDTOMON 22
 #define PRIORITY_TRECEIVEFROMMON 25
-#define PRIORITY_TSTARTROBOT 20
+#define PRIORITY_TSTARTROBOT 21
 #define PRIORITY_TBATTERY 20
 #define PRIORITY_TCAMERA 21
 
@@ -289,7 +289,10 @@ void Tasks::ReceiveFromMonTask(void *arg) {
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD) || msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)) {  //Adding with watchdog
-            if(msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)) modeStart=1;
+            if(msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)){
+                cout << "Test with watchdog <= " << msgRcv->ToString() << endl << flush;
+                modeStart=1;
+            }
             rt_sem_v(&sem_startRobot); 
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
@@ -354,14 +357,17 @@ void Tasks::StartRobotTask(void *arg) {
         Message * msgSend;
         rt_sem_p(&sem_startRobot, TM_INFINITE);
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+        
+        //Mode start with or without wd
         if(modeStart == 1){
             cout << "Start robot with watchdog (";
-            robot.Write(robot.StartWithWD());
+            msgSend = robot.Write(robot.StartWithWD());
         }
         else{
             cout << "Start robot without watchdog (";
             msgSend = robot.Write(robot.StartWithoutWD());
         }
+        
         rt_mutex_release(&mutex_robot);
         cout << msgSend->GetID();
         cout << ")" << endl;
@@ -443,8 +449,10 @@ void Tasks::MoveTask(void *arg) {
             cout << " move: " << cpMove;
             
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            cout << " test1: " << cpMove;
             robot.Write(new Message((MessageID)cpMove));
             rt_mutex_release(&mutex_robot);
+            cout << " test2 : " << cpMove;
         }
         cout << endl << flush;
     }
