@@ -27,7 +27,7 @@
 #define PRIORITY_TSTARTROBOT 21
 #define PRIORITY_TBATTERY 20
 #define PRIORITY_TCAMERA 21
-#define PRIORITY_TRELOADWD 20
+#define PRIORITY_TRELOADWD 24
 
 /*
  * Some remarks:
@@ -471,29 +471,26 @@ void Tasks::ReloadWD(void *args){
         rt_task_wait_period(NULL);
         
         //rt_sem_p(&sem_startRobot, TM_INFINITE);
-        
+     
+        cout << "Reload WD";
+        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+        rs = robotStarted;
+        rt_mutex_release(&mutex_robotStarted);
+            
         rt_mutex_acquire(&mutex_modeStart, TM_INFINITE);
         ms = modeStart;
         rt_mutex_release(&mutex_modeStart);
         
-        if(ms==1){
-            cout << "Reload WD";
-            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-            rs = robotStarted;
-            rt_mutex_release(&mutex_robotStarted);
-        
-            Message * reload;
-            if (rs == 1) {
+        Message * reload;
+        if (rs == 1 && ms == 1 ) {
             
-                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-                reload = robot.Write(robot.ReloadWD());
-                rt_mutex_release(&mutex_robot);
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            reload = robot.Write(robot.ReloadWD());
+            rt_mutex_release(&mutex_robot);
             
-                cout << " reload: " << reload->ToString() << endl << flush;
-                WriteInQueue(&q_messageToMon,reload); //Send message to monitor
-            }
+            cout << " reload: " << reload->ToString() << endl << flush;
+            WriteInQueue(&q_messageToMon,reload); //Send message to monitor
         }
-
         cout << endl << flush;
     }
 }
