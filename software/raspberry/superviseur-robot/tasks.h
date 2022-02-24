@@ -86,6 +86,7 @@ private:
     RT_MUTEX mutex_monitor;
     RT_MUTEX mutex_robot;
     RT_MUTEX mutex_robotStarted;
+    RT_MUTEX mutex_modeStart;
     RT_MUTEX mutex_move;
 
     /**********************************************************************/

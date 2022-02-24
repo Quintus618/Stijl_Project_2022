@@ -71,6 +71,10 @@ void Tasks::Init() {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_modeStart, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_mutex_create(&mutex_move, NULL)) {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -307,7 +311,10 @@ void Tasks::ReceiveFromMonTask(void *arg) {
              
             if(msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD)){
                 cout << "Test with watchdog <= " << msgRcv->ToString() << endl << flush;
+                rt_mutex_acquire(&mutex_modeStart, TM_INFINITE);
                 modeStart=1;
+                rt_mutex_release(&mutex_modeStart);
+                
             }
             rt_sem_v(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
@@ -376,7 +383,12 @@ void Tasks::StartRobotTask(void *arg) {
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         
         //Mode start with or without wd
-        if(modeStart == 1){
+        
+        rt_mutex_acquire(&mutex_modeStart, TM_INFINITE);
+        ms = modeStart;
+        rt_mutex_release(&mutex_modeStart);
+        
+        if(ms == 1){
             cout << "Start robot with watchdog ("; 
             msgSend = robot.Write(robot.StartWithWD());
         }
@@ -458,7 +470,11 @@ void Tasks::ReloadWD(void *args){
         
         //rt_sem_p(&sem_startRobot, TM_INFINITE);
         
-        //if(modeStart==1){
+        rt_mutex_acquire(&mutex_modeStart, TM_INFINITE);
+        ms = modeStart;
+        rt_mutex_release(&mutex_modeStart);
+        
+        if(ms==1){
             cout << "Reload WD";
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             rs = robotStarted;
@@ -474,7 +490,7 @@ void Tasks::ReloadWD(void *args){
                 cout << " reload: " << reload->ToString() << endl << flush;
                 WriteInQueue(&q_messageToMon,reload); //Send message to monitor
             }
-        //}
+        }
 
         cout << endl << flush;
     }
