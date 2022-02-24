@@ -372,6 +372,7 @@ void Tasks::StartRobotTask(void *arg) {
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
     bool launch = false;
+    int ms;
     /**************************************************************************************/
     /* The task startRobot starts here                                                    */
     /**************************************************************************************/
@@ -465,6 +466,7 @@ void Tasks::ReloadWD(void *args){
     
     
     int rs;
+    int ms;
     while (1) {
         rt_task_wait_period(NULL);
         
