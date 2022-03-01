@@ -67,6 +67,8 @@ private:
     int robotStarted = 0;
     int modeStart = 0;
     int move = MESSAGE_ROBOT_STOP;
+    int counter_robot = 0;
+    bool notReset = true;
     
     /**********************************************************************/
     /* Tasks                                                              */
@@ -88,6 +90,7 @@ private:
     RT_MUTEX mutex_robotStarted;
     RT_MUTEX mutex_modeStart;
     RT_MUTEX mutex_move;
+    RT_MUTEX mutex_counter_robot;
 
     /**********************************************************************/
     /* Semaphores                                                         */

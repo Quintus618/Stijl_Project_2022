@@ -79,6 +79,10 @@ void Tasks::Init() {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_counter_robot, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Mutexes created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -357,9 +361,19 @@ void Tasks::OpenComRobot(void *arg) {
         Message * msgSend;
         if (status < 0) {
             msgSend = new Message(MESSAGE_ANSWER_NACK);
+            rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+            counter_robot++;
+                if(counter_robot>3){
+                    cout << "Communication avec le robot perdue!" << counter_robot << endl << flush;
+                }
+            rt_mutex_release(&mutex_counter_robot);
         } else {
             msgSend = new Message(MESSAGE_ANSWER_ACK);
+            rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+            counter_robot = 0;
+            rt_mutex_release(&mutex_counter_robot);
         }
+        cout << "compteur d'erreur: " << counter_robot << endl << flush;
         WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
     }
 }
@@ -410,10 +424,23 @@ void Tasks::StartRobotTask(void *arg) {
             robotStarted = 1;
             rt_mutex_release(&mutex_robotStarted);
             
+            rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+            counter_robot = 0;
+            rt_mutex_release(&mutex_counter_robot);
+            
             if(robotStarted==1){
                 rt_sem_v(&sem_startWithWD);
             }
         }
+        else {
+            rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+            counter_robot++;
+            if(counter_robot>3){
+                    cout << "Communication avec le robot perdue!" << counter_robot << endl << flush;
+                }
+            rt_mutex_release(&mutex_counter_robot);
+        }
+        cout << "compteur d'erreur: " << counter_robot << endl << flush;
     }
 }
 
@@ -434,7 +461,7 @@ void Tasks::CheckBatteryTask(void *arg){
         while(1) {
             
             rt_task_wait_period(NULL);
-            cout << " Battery check";
+            cout << " Battery check"<< endl << flush;
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             rs = robotStarted;
             rt_mutex_release(&mutex_robotStarted);
@@ -443,7 +470,7 @@ void Tasks::CheckBatteryTask(void *arg){
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
                 battery = robot.Write(robot.GetBattery());
                 rt_mutex_release(&mutex_robot);
-
+                
                 cout << " battery: " << battery->ToString() << endl << flush;
                 WriteInQueue(&q_messageToMon,battery); //Send message to monitor
             }
@@ -472,7 +499,6 @@ void Tasks::ReloadWD(void *args){
         
         //rt_sem_p(&sem_startRobot, TM_INFINITE);
      
-        cout << "Reload WD";
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
         rt_mutex_release(&mutex_robotStarted);
@@ -484,12 +510,31 @@ void Tasks::ReloadWD(void *args){
         Message * reload;
         if (rs == 1 && ms == 1 ) {
             
+            cout << "Reload WD"<< endl << flush;
+            
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             reload = robot.Write(robot.ReloadWD());
             rt_mutex_release(&mutex_robot);
             
             cout << " reload: " << reload->ToString() << endl << flush;
             WriteInQueue(&q_messageToMon,reload); //Send message to monitor
+            
+            if (reload->GetID() == MESSAGE_ANSWER_ACK){
+                rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+                counter_robot = 0;
+                rt_mutex_release(&mutex_counter_robot);
+            }
+            else {
+                rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+                counter_robot++;
+                if(counter_robot>3){
+                    cout << "Communication avec le robot perdue!" << counter_robot << endl << flush;
+                    
+                }
+                rt_mutex_release(&mutex_counter_robot);
+            }
+            
+            cout << "compteur d'erreur: " << counter_robot << endl << flush;
         }
         cout << endl << flush;
     }
@@ -501,7 +546,7 @@ void Tasks::ReloadWD(void *args){
 void Tasks::MoveTask(void *arg) {
     int rs;
     int cpMove;
-    
+    Message * m_robot; 
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
@@ -513,7 +558,7 @@ void Tasks::MoveTask(void *arg) {
 
     while (1) {
         rt_task_wait_period(NULL);     
-        cout << "Periodic movement update";
+        cout << "Periodic movement update"<< endl << flush;
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
         rt_mutex_release(&mutex_robotStarted);
@@ -521,12 +566,27 @@ void Tasks::MoveTask(void *arg) {
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
             cpMove = move;
             rt_mutex_release(&mutex_move);
+           
             
             cout << " move: " << cpMove;
             
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            robot.Write(new Message((MessageID)cpMove));
-            rt_mutex_release(&mutex_robot);
+            m_robot=robot.Write(new Message((MessageID)cpMove));
+            rt_mutex_release(&mutex_robot); 
+            cout << " move counter " << m_robot->ToString() << endl << flush;
+            
+            if (m_robot->GetID() == MESSAGE_ANSWER_ACK){
+                rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+                counter_robot = 0;
+                rt_mutex_release(&mutex_counter_robot);
+            }else{
+                rt_mutex_acquire(&mutex_counter_robot, TM_INFINITE);
+                counter_robot++;
+                if(counter_robot>3){
+                    cout << "Communication avec le robot perdue!" << counter_robot << endl << flush;
+                }
+                rt_mutex_release(&mutex_counter_robot);
+            }
         }
         cout << endl << flush;
     }
